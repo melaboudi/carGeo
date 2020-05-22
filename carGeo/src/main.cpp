@@ -36,7 +36,6 @@
   uint16_t httpActionFail = 0;
   uint16_t FirstStartCounter = 0;
   uint16_t ReStartCounter=0;
-  bool onOff = true;
   unsigned long t1 = 0; //le temps du dernier point inséré
   unsigned long t2 = 0; //le temps du dernier point capté
   uint16_t ti = 6; //le temps entre chaque insertion
@@ -116,7 +115,7 @@
   int limitToSend =12;
   unsigned long te = 60; //le temps entre les envoies
   String previousUnixTime="";
-  uint16_t iterations=8; //sleeping time = iterations X 8 Seconds
+  uint16_t iterations=80; //sleeping time = iterations X 8 Seconds
   void setup() {
     delay(100);
     fram.begin();
@@ -141,7 +140,7 @@
 void loop() {
   if(getCounter()>600){clearMemory(30999);clearMemoryDebug(32003);resetSS();} 
   enablePinChangeInterrupt(digitalPinToPinChangeInterrupt(intPin));
-  if (!digitalRead(8)) {           //if the engine is powered on
+  if (digitalRead(8)) {           //if the engine is powered on
     gps();                         //get a new gps point all the time
     if((t2 - t3) >= (te-8)){t3=t2; //wait until it's 8 seconds before it's time to send
       httpPing();gps();            //Ping the server and get a new gps point
@@ -167,10 +166,9 @@ void loop() {
       }
     }
   }else {                          //if the engine is powered off
-    httpTimeout=25000;
+    httpTimeout=20000;
     while ((getCounter()!=0)&&(!digitalRead(8))){httpPostMaster();}
     httpTimeout=14000;
-    httpPostCustom('0');
     powerDown();
     attachPinChangeInterrupt(digitalPinToPinChangeInterrupt(intPin), IntRoutine, RISING);
     Serial.flush();
@@ -179,16 +177,9 @@ void loop() {
       if (digitalRead(8)){wakeUpCounter= iterations;}
       wakeUpCounter++;
     }
-    if (wakeUpCounter != (iterations+1)) {                  //Vehicule ignition wakeup
-      powerUp();turnOnGns(); gprsOn();
-      wakeUpCounter = 0;  
-      httpPostCustom('1');
-    }else {                                                 //WD timer wakeups
-      powerUp();turnOnGns();gprsOn();
-      wakeUpCounter = 0;
-      httpPostCustom('1');
-      gps();
-    }
+    powerUp();turnOnGns();gprsOn();
+    wakeUpCounter = 0;
+    gps();
   }
 }
 void httpPostMaster(){
@@ -224,12 +215,14 @@ void httpPostMaster(){
 
 bool gps(){
   if (!getGpsData()) {
-      if (!getGnsStat()) {if (gnsFailCounter == 2) {resetSS();} else {turnOnGns();delay(1000);gnsFailCounter++;}}
-        if(restarted){if (ReStartCounter == 10) {resetSS();}else {delay(2000);ReStartCounter++;}
-        }else if (started){if (FirstStartCounter == 1) {resetSS();}else{delay(60000);FirstStartCounter++;}
-        }else if((!restarted)&&(!started)){if (gpsFailCounter == 10) {resetSS();}else {delay(1000);gpsFailCounter++;}}
-        return false;
-    }else{return true;}   
+    if (!getGnsStat()) {if (gnsFailCounter == 2) {resetSS();} else {turnOnGns();delay(1000);gnsFailCounter++;}}
+      if(restarted){if (ReStartCounter == 5) {resetSS();}else {delay(2000);ReStartCounter++;}
+      }else if (started){if (FirstStartCounter == 1) {resetSS();}else{delay(60000);FirstStartCounter++;}
+      }else if((!restarted)&&(!started)){if (gpsFailCounter == 5) {resetSS();}else {delay(1000);gpsFailCounter++;}}
+      
+      if (!getGpsData()) {return false;}else{return true;}
+
+  }else{return true;}
 }
 bool httpPostFromTo(uint16_t p1, uint16_t p2) {
   if(!ping){
@@ -509,8 +502,6 @@ bool getGpsData() {
     badCharChecker(batteryLevel());
     badCharChecker(lastUnixTime);
  
-    if (onOff) {
-      onOff = false;}
     if ((fixStatus.toInt() == 1) && (latitude.toInt() != 0) && (longitude.toInt() != 0)&&(badCharCounter==0)&&(lastUnixTime!=previousUnixTime)) {
       previousUnixTime=lastUnixTime;
       started = false;
