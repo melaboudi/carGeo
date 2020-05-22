@@ -4,7 +4,7 @@
   #define intPin 8
   volatile bool flag=false;
   bool received=false;
-
+  // uint32_t debugWriteCounter=20000;
   #include "Adafruit_FRAM_I2C.h"
   Adafruit_FRAM_I2C fram     = Adafruit_FRAM_I2C();
   uint16_t          framAddr = 0;
@@ -42,9 +42,8 @@
   uint16_t ti = 6; //le temps entre chaque insertion
   unsigned long t3 = 0; //le temps du dernier envoie
   unsigned long unixTimeInt = 0;
-  uint16_t SizeRec = 163;
-  // uint16_t SizeRec = 51; //=sizeSend -imei=66-15
-  // uint16_t sizeSend=66;
+  uint16_t SizeRec = 49;//49
+  uint16_t sizeSend=163;//163
   bool wakeUp=true;
   bool OkToSend = true;
   uint16_t maxTime = 0;
@@ -62,7 +61,7 @@
   //6  25----4Points 8secondsSend
   int badCharCounter=0;
   // uint16_t httpTimeout=8000;  //voiture 07 06/05/2020 from 9am to 10am ¬OK
-  uint16_t httpTimeout=12000;  //voiture 07
+  uint16_t httpTimeout=14000;  //voiture 07
   uint64_t lastSend =0;
   uint16_t reps=0;
   char* one="1";
@@ -140,9 +139,9 @@
 }
 
 void loop() {
-  if(getCounter()>100){clearMemory(30999);clearMemoryDebug(32003);resetSS();} 
+  if(getCounter()>600){clearMemory(30999);clearMemoryDebug(32003);resetSS();} 
   enablePinChangeInterrupt(digitalPinToPinChangeInterrupt(intPin));
-  if (digitalRead(8)) {            //if the engine is powered on
+  if (!digitalRead(8)) {           //if the engine is powered on
     gps();                         //get a new gps point all the time
     if((t2 - t3) >= (te-8)){t3=t2; //wait until it's 8 seconds before it's time to send
       httpPing();gps();            //Ping the server and get a new gps point
@@ -170,7 +169,7 @@ void loop() {
   }else {                          //if the engine is powered off
     httpTimeout=25000;
     while ((getCounter()!=0)&&(!digitalRead(8))){httpPostMaster();}
-    httpTimeout=12000;
+    httpTimeout=14000;
     httpPostCustom('0');
     powerDown();
     attachPinChangeInterrupt(digitalPinToPinChangeInterrupt(intPin), IntRoutine, RISING);
@@ -198,12 +197,13 @@ void httpPostMaster(){
       if(httpPostFromTo((i)*limitToSend,((i+1)*limitToSend))){
         writeDataFramDebug("0",(32080+i));
         clearMemoryDiff((i)*limitToSend*SizeRec,((i+1)*limitToSend*SizeRec));
-      }else{
-        uint8_t j=0;while (ping&&(j<3)){httpPing();j++;}if (j==3){resetSS();}
-        httpPostFromTo((i)*limitToSend,((i+1)*limitToSend));
-        writeDataFramDebug("0",(32080+i));
-        clearMemoryDiff((i)*limitToSend*SizeRec,((i+1)*limitToSend*SizeRec));
       }
+      // else{
+      //   uint8_t j=0;while (ping&&(j<3)){httpPing();j++;}if (j==3){resetSS();}
+      //   httpPostFromTo((i)*limitToSend,((i+1)*limitToSend));
+      //   writeDataFramDebug("0",(32080+i));
+      //   clearMemoryDiff((i)*limitToSend*SizeRec,((i+1)*limitToSend*SizeRec));
+      // }
     }
   }
   if((getCounter()%limitToSend)!=0){
@@ -211,12 +211,13 @@ void httpPostMaster(){
     if(httpPostFromTo((reps*limitToSend),getCounter())){
       clearMemoryDiff(reps*limitToSend*SizeRec,getCounter()*SizeRec); 
       clearMemoryDebug(32003);
-    }else{
-      uint8_t j=0;while (ping&&(j<3)){httpPing();j++;}if (j==3){resetSS();}
-      httpPostFromTo(reps*limitToSend,getCounter());
-      clearMemoryDiff(reps*limitToSend*SizeRec,getCounter()*SizeRec); 
-      clearMemoryDebug(32003);
     }
+    // else{
+    //   uint8_t j=0;while (ping&&(j<3)){httpPing();j++;}if (j==3){resetSS();}
+    //   httpPostFromTo(reps*limitToSend,getCounter());
+    //   clearMemoryDiff(reps*limitToSend*SizeRec,getCounter()*SizeRec); 
+    //   clearMemoryDebug(32003);
+    // }
   }else{clearMemoryDebug(32003);}
 }
 
@@ -240,7 +241,8 @@ bool httpPostFromTo(uint16_t p1, uint16_t p2) {
           flushSim();
           Serial.print("AT+HTTPDATA=");
           delay(100);
-          uint16_t Size = ((p2-p1) * (SizeRec)) + 40 + 140;
+          // uint16_t Size = ((p2-p1) * (sizeRec)) + 40 + 140;
+          uint16_t Size = ((p2-p1) * (sizeSend)) + 40 + 140;
           Serial.print(Size);
           Serial.print(",");
           uint32_t maxTime = 30000;
@@ -254,17 +256,28 @@ bool httpPostFromTo(uint16_t p1, uint16_t p2) {
             Serial.write(Buffer);
             delay(1);
           }  
-/////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////          
           for (uint16_t i = p1; i < p2 ; i++)
           {
-            for (uint16_t j = SizeRec * i; j < (SizeRec * (i + 1)) ; j++)
-            {
-              // sendFromFram(31474, 15);   //imei
-              uint16_t test = fram.read8(j);
-              sprintf(Buffer, "%c", test);
-              Serial.write(Buffer);
-              delay(1);
-            }
+            sendFromFram(31041,13);           //"<Track Imei=\""                           //13
+            sendFromFram(31474,15);           //imei                                       //15
+            sendFromFram(31054,26);           //"\" Fc=\"WGS84\" FixPosition=\""           //26
+            sendFromFram(SizeRec*(i),1);      //fix                                        //1
+            sendFromFram(31080,7);            //"\" Lat=\""                                //7
+            sendFromFram(1+SizeRec*(i),10);   //Latitude                                   //10
+            sendFromFram(31087,7);            //"\"Lon=\""                                 //7
+            sendFromFram(11+SizeRec*(i),11);  //Longitude                                  //11
+            sendFromFram(31094,7);            //"\" Vit=\""                                //7
+            sendFromFram(22+SizeRec*(i),6);   //Speed                                      //6
+            sendFromFram(31101,7);            //"\" Sat=\""                                //7
+            sendFromFram(28+SizeRec*(i),2);   //Sat                                        //2
+            sendFromFram(31108,7);            //"\" Cap=\""                                //7
+            sendFromFram(30+SizeRec*(i),6);   //Course                                     //6
+            sendFromFram(31115,16);           //"\" BatteryLevel=\""                       //16
+            sendFromFram(36+SizeRec*(i),3);   //BatLev                                     //3
+            sendFromFram(31131,6);            //"\" Dh=\""                                 //6
+            sendFromFram(39+SizeRec*(i),10);  //Dh                                         //10
+            sendFromFram(31137,3);            //"\"/>";                                    //3  
           }
 /////////////////////////////////////////////////////////////////////          
           for(int i=0;i<40;i++){
@@ -687,28 +700,14 @@ void getWriteFromFram(uint16_t p1, uint16_t p2){
 }
 void insertMem() {
   framWritePosition = getCounter() * SizeRec;
-  getWriteFromFram(31041,13); //"<Track Imei=\""        //13
-  // char* ourImei=imei.c_str();
-  // writeDataFram(ourImei);  
-  writeDataFram("869170031844211");                     //15
-  // getWriteFromFram(31474,15); //IMEI                    //15
-  getWriteFromFram(31054,26); //"\" Fc=\"WGS84\" FixPosition=\""  //26
   writeDataFram(fixStatus.c_str());                     //1
-  getWriteFromFram(31080,7); //"\" Lat=\""              //7
   writeDataFram(latitude.c_str());                      //10
-  getWriteFromFram(31087,7); //"\" Lon=\""              //7
   writeDataFram(longitude.c_str());                     //11
-  getWriteFromFram(31094,7); //"\" Vit=\""              //7
   writeDataFram(speed.c_str());                         //6
-  getWriteFromFram(31101,7); //"\" Sat=\""              //7
   writeDataFram(used_satellites.c_str());               //2
-  getWriteFromFram(31108,7); //"\" Cap=\""              //7
   writeDataFram(course.c_str());                        //6
-  getWriteFromFram(31115,16); //"\" BatteryLevel=\""    //16
   writeDataFram(batteryLevel().c_str());                //3
-  getWriteFromFram(31131,6); //"\" Dh=\""               //6
   writeDataFram(gpsTime.c_str());                  //10
-  getWriteFromFram(31137,3); //"\"/>"                   //3
   incrementCounter();
   if((getCounter()%limitToSend)==0){writeDataFramDebug("1",(32079+(getCounter()/limitToSend)));}
 }
@@ -835,6 +834,8 @@ void sendFromFram(uint16_t start,uint16_t length){
     char Buffer[2] = {0};
     sprintf(Buffer, "%c", test);
     Serial.print(Buffer);
+    // writeDataFramDebug(Buffer,debugWriteCounter);
+    // debugWriteCounter++;
   }
 
 }
