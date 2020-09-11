@@ -66,6 +66,7 @@
   char* one="1";
   char* zero="0";
   bool ping=true;
+  uint8_t noGsmCounter=0;
   bool httpPostCustom(char custom);
   void badCharChecker(String data);
   void IntRoutine(void);
@@ -133,11 +134,18 @@
     while (getGsmStat() != 1) {
       delay(500);
     }
-    gprsOn();httpPing();gps();
+    gprsOn();httpPing();
+    while (!gps());
     attachPinChangeInterrupt(digitalPinToPinChangeInterrupt(intPin), IntRoutine, RISING);
 }
 
 void loop() {
+
+
+
+
+
+  
   if(getCounter()>600){clearMemory(30999);clearMemoryDebug(32003);resetSS();} 
   enablePinChangeInterrupt(digitalPinToPinChangeInterrupt(intPin));
   if (digitalRead(8)) {           //if the engine is powered on
@@ -502,7 +510,7 @@ bool getGpsData() {
     badCharChecker(batteryLevel());
     badCharChecker(lastUnixTime);
  
-    if ((fixStatus.toInt() == 1) && (latitude.toInt() != 0) && (longitude.toInt() != 0)&&(badCharCounter==0)&&(lastUnixTime!=previousUnixTime)) {
+    if ((fixStatus.toInt() == 1) && (latitude.toInt() > 20) && (longitude.toInt() < 0)&&(badCharCounter==0)&&(lastUnixTime!=previousUnixTime)) {
       previousUnixTime=lastUnixTime;
       started = false;
       restarted=false;
@@ -610,6 +618,7 @@ void writeDataFram(char* dataFram) {
   uint8_t dataFramSize = strlen(dataFram);
   for (unsigned long i = framWritePosition; i <= (dataFramSize + framWritePosition); i++)
   {
+    delay(1);
     fram.write8(i, dataFram[(i - framWritePosition)]);
   } framWritePosition += (dataFramSize) ;
 }
@@ -617,6 +626,7 @@ void writeDataFramDebug(char* dataFram, long p1) {
   //for (unsigned long i = p1; i <= (p1 + strlen(dataFram)); i++)
   for (unsigned long i = p1; i < (p1 + strlen(dataFram)); i++)
   {
+    delay(1);
     fram.write8(i, dataFram[(i - p1)]);
   }
 }
