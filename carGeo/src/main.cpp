@@ -1,6 +1,7 @@
 //inits
   #include "LowPower.h"
   #include "PinChangeInterrupt.h"
+  // #include <Adafruit_SleepyDog.h>
   #define intPin 8
   volatile bool flag=false;
   bool received=false;
@@ -137,16 +138,11 @@
     gprsOn();httpPing();
     while (!gps());
     attachPinChangeInterrupt(digitalPinToPinChangeInterrupt(intPin), IntRoutine, RISING);
+    // int countdownMS = Watchdog.enable(4000);
 }
 
 void loop() {
-
-
-
-
-
-  
-  if(getCounter()>600){clearMemory(30999);clearMemoryDebug(32003);resetSS();} 
+  if(getCounter()>380){clearMemory(30999);clearMemoryDebug(32003);resetSS();} 
   enablePinChangeInterrupt(digitalPinToPinChangeInterrupt(intPin));
   if (digitalRead(8)) {           //if the engine is powered on
     gps();                         //get a new gps point all the time
